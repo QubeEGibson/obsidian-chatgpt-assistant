@@ -1,36 +1,61 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
+export interface VaultPilotSettings {
+	// OpenAI
+	apiKeySecretId: string;   			// e.g. "openai.vaultpilot" or whatever user created in Keychain
+	openaiApiKeyFallback: string; // used only when SecretStorage/Keychain is unavailable
+	model: string;                        // e.g. "gpt-4.1-mini"
+	embeddingModel: string;               // e.g. "text-embedding-3-large"
+	openaiBaseUrl: string;                // default https://api.openai.com
 
-export interface MyPluginSettings {
-	mySetting: string;
+	// Indexing
+	indexFolders: string[];
+	excludeFolders: string[];
+	maxChunkChars: number;
+	overlapChars: number;
+	sendExcerptsOnly: boolean;
+	redactPatterns: string[];
+	includeFrontmatterInIndex: boolean;
+
+	// Templates / automation
+	templatesFolder: string;              // e.g. "99_Templates"
+	personTemplateFile: string;           // e.g. "Person.md" (in templatesFolder)
+	meetingTemplateFile: string;          // e.g. "Meeting.md" (in templatesFolder)
+	peopleFolder: string;                 // e.g. "04_People"
+	meetingsFolder: string;               // e.g. "02_Meetings"
+
+	// Behavior
+	enableAutoIndexOnChange: boolean;
+	enableMeetingAutomation: boolean;
+	meetingAutomationTag: string;         // e.g. "#meeting"
+	aiOptOutFrontmatterKey: string;       // default "ai"
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+export const DEFAULT_SETTINGS: VaultPilotSettings = {
+	apiKeySecretId: "vaultpilot.openai_api_key",
+	openaiApiKeyFallback: "",
+	model: "gpt-4.1-mini",
+	embeddingModel: "text-embedding-3-large",
+	openaiBaseUrl: "https://api.openai.com",
 
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	indexFolders: ["04_People", "02_Meetings", "Projects"],
+	excludeFolders: [".obsidian", "99_Templates"],
+	maxChunkChars: 2400,
+	overlapChars: 250,
+	sendExcerptsOnly: true,
+	redactPatterns: [
+		"(?i)api[_-]?key\\s*[:=]\\s*\\S+",
+		"(?i)password\\s*[:=]\\s*\\S+",
+		"(?i)secret\\s*[:=]\\s*\\S+"
+	],
+	includeFrontmatterInIndex: true,
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+	templatesFolder: "99_Templates",
+	personTemplateFile: "Person.md",
+	meetingTemplateFile: "Meeting.md",
+	peopleFolder: "04_People",
+	meetingsFolder: "02_Meetings",
 
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
-}
+	enableAutoIndexOnChange: true,
+	enableMeetingAutomation: true,
+	meetingAutomationTag: "#meeting",
+	aiOptOutFrontmatterKey: "ai"
+};

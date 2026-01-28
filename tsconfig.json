@@ -1,30 +1,20 @@
 {
-	"compilerOptions": {
-		"baseUrl": "src",
-		"inlineSourceMap": true,
-		"inlineSources": true,
-		"module": "ESNext",
-		"target": "ES6",
-		"allowJs": true,
-		"noImplicitAny": true,
-		"noImplicitThis": true,
-		"noImplicitReturns": true,
-		"moduleResolution": "node",
-		"importHelpers": true,
-		"noUncheckedIndexedAccess": true,
-		"isolatedModules": true,
-		"strictNullChecks": true,
-		"strictBindCallApply": true,
-		"allowSyntheticDefaultImports": true,
-		"useUnknownInCatchVariables": true,
-		"lib": [
-			"DOM",
-			"ES5",
-			"ES6",
-			"ES7"
-		]
-	},
-	"include": [
-		"src/**/*.ts"
-	]
+  "name": "vaultpilot",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node esbuild.config.mjs --watch",
+    "build": "node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.20.2",
+    "obsidian": "^1.5.12",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "dexie": "^4.0.8"
+  }
 }
