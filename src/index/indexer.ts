@@ -45,8 +45,12 @@ export class VaultIndexer {
     async onFileCreated(f: TAbstractFile) {
         if (f instanceof TFile) await this.indexFileIfAllowed(f);
     }
-    async onFileModified(f: TAbstractFile) {
-        if (f instanceof TFile) await this.indexFileIfAllowed(f);
+    async onFileModified(f: TFile) {
+        try {
+            await this.indexFileIfAllowed(f);
+        } catch (e) {
+            console.error(`[VaultPilot] onFileModified indexing failed:  ${f.path}:`, e);
+        }
     }
     async onFileDeleted(f: TAbstractFile) {
         if (f instanceof TFile) await this.deleteFileFromIndex(f.path);
@@ -95,6 +99,7 @@ export class VaultIndexer {
                     continue;
                 }
 
+                console.log("[VaultPilot] embeddingModel:", s.embeddingModel);
                 const embedding = await this.openai.embed(s.embeddingModel, redacted);
                 records.push({
                     id: c.chunkId,
@@ -130,11 +135,17 @@ export class VaultIndexer {
         }
     }
 
-    private async upsertByDiff(file: TFile, mtime: number, chunks: any[], newlyEmbedded: ChunkRecord[]) {
+    private async upsertByDiff(
+        file: TFile,
+        mtime: number,
+        chunks: any[],
+        newlyEmbedded: ChunkRecord[]
+    ) {
         const notePath = file.path;
         const existing = await this.db.chunks.where("notePath").equals(notePath).toArray();
         const existingById = new Map(existing.map(e => [e.id, e]));
         const newIds = new Set(chunks.map((c: any) => c.chunkId));
+        const newlyById = new Map(newlyEmbedded.map(r => [r.id, r]));
 
         // Delete removed chunks
         const removed = existing.filter(e => !newIds.has(e.id)).map(e => e.id);
@@ -144,12 +155,10 @@ export class VaultIndexer {
         const puts: ChunkRecord[] = [];
 
         for (const c of chunks) {
-            const redacted = c.text; // chunker already returned raw; indexFileIfAllowed uses redacted; here we assume caller passed same
             const id = c.chunkId;
             const current = existingById.get(id);
 
-            // find if this chunk had a newly computed embedding
-            const newRec = newlyEmbedded.find(r => r.id === id);
+            const newRec = newlyById.get(id);
             if (newRec) {
                 puts.push(newRec);
                 continue;
@@ -157,17 +166,15 @@ export class VaultIndexer {
 
             // unchanged chunk: preserve prior embedding
             if (current) {
-                puts.push({
-                    ...current,
-                    mtime
-                });
-            } else {
-                // missing and not in newlyEmbedded means caller didn't compute; compute now
-                // (Should be rare; safeguard)
-                throw new Error(`Index diff error: missing embedding for new chunk ${id}`);
+                puts.push({ ...current, mtime });
+                continue;
             }
+
+            // New chunk but no embedding available (embed call likely failed). Skip, don’t crash.
+            console.warn("[VaultPilot] Missing embedding for new chunk; skipping", { id, notePath });
         }
 
         await this.db.chunks.bulkPut(puts);
     }
+
 }

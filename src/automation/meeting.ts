@@ -1,8 +1,9 @@
 import { App, Notice, TFile } from "obsidian";
 import { OpenAIClient } from "../openai/OpenAIClient";
 import { VaultPilotSettings } from "../settings";
-import { MeetingExtractSchema, PersonExtractSchema } from "../openai/schemas";
+import { VaultQAOutputSchema, MeetingExtractSchema, PersonExtractSchema } from "../openai/schemas";
 import { renderTemplate, slugifyFileName } from "../templates/templating";
+import { extractStructuredJson } from "../openai/extract";
 
 function todayISO(): string {
     const d = new Date();
@@ -100,29 +101,35 @@ export async function runMeetingAutomation(
         input: [
             {
                 role: "system",
-                content: [
-                    {
-                        type: "text",
-                        text:
-                            "Extract meeting details from the user's raw meeting notes. " +
-                            "Be conservative; only include attendees you are reasonably sure are people names. " +
-                            "If date or time not present, return empty strings for those fields."
-                    }
-                ]
+                content:
+                    "You answer questions using ONLY the provided CHUNK context. " +
+                    "If the answer is not in the context, say you don't have enough information. " +
+                    "Return citations that reference the notePath and chunkId you used. " +
+                    "When possible, include a short quote in each citation."
             },
             {
                 role: "user",
-                content: [{ type: "text", text: activeText }]
+                content: activeText
             }
         ],
-        response_format: {
-            type: "json_schema",
-            json_schema: MeetingExtractSchema
+        text: {
+            format: {
+                type: "json_schema",
+                name: MeetingExtractSchema.name,
+                strict: MeetingExtractSchema.strict,
+                schema: MeetingExtractSchema.schema
+            }
         }
     });
 
-    const meetingJson = extract.output?.[0]?.content?.[0]?.json ?? extract.output_json ?? null;
-    if (!meetingJson) throw new Error("Meeting extraction failed (no structured output).");
+    console.log("[VaultPilot] Responses output_text:", extract?.output_text);
+    console.log("[VaultPilot] Responses output:", extract?.output);  
+
+    const meetingJson = extractStructuredJson(extract);
+    if (!meetingJson) {
+    console.error("[VaultPilot] Meeting automation: could not extract structured JSON. Full resp:", extract);
+    throw new Error("Meeting extraction failed (no structured output).");
+    }
 
     // 2) Extract per-person notes (optional enrichment) from the active note
     const peopleExtract = await openai.respond({
@@ -130,25 +137,24 @@ export async function runMeetingAutomation(
         input: [
             {
                 role: "system",
-                content: [
-                    {
-                        type: "text",
-                        text:
-                            "From these meeting notes, produce brief per-person notes for each attendee. " +
-                            "If nothing specific is known about a person beyond attendance, set notes to empty string."
-                    }
-                ]
+                content:
+                    "You answer questions using ONLY the provided CHUNK context. " +
+                    "If the answer is not in the context, say you don't have enough information. " +
+                    "Return citations that reference the notePath and chunkId you used. " +
+                    "When possible, include a short quote in each citation."
             },
             {
                 role: "user",
-                content: [
-                    { type: "text", text: `Attendees: ${(meetingJson.attendees || []).join(", ")}\n\nNotes:\n${activeText}` }
-                ]
+                content: `Attendees: ${(meetingJson.attendees || []).join(", ")}\n\nNotes:\n${activeText}`
             }
         ],
-        response_format: {
-            type: "json_schema",
-            json_schema: PersonExtractSchema
+        text: {
+            format: {
+                type: "json_schema",
+                name: PersonExtractSchema.name,
+                strict: PersonExtractSchema.strict,
+                schema: PersonExtractSchema.schema
+            }
         }
     });
 
